@@ -1,0 +1,21 @@
+{
+    "manifest_version": 2,
+    "name": "PicoTab",
+    "version": "0.1.0",
+    "description": "A minimal successor to Zendesk QuickTab",
+    "icons": {
+        "48": "icon.svg",
+        "128": "icon.svg"
+    },
+    "permissions": [
+        "tabs",
+        "webNavigation",
+        "http://*.zendesk.com/*",
+        "https://*.zendesk.com/*"
+    ],
+    "background": {
+        "scripts": [
+            "background.ts"
+        ]
+    }
+}
