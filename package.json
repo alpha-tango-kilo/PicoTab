@@ -6,6 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "parcel watch src/manifest.json --target dev",
     "build": "rm -rf build/** && parcel build src/manifest.json --target prod",
+    "ship": "rm -f build/*.js.map && zip -9 release.zip build/* LICENSE",
     "clean": "rm -rf dev/** build/** .parcel-cache .cache"
   },
   "targets": {

@@ -17,3 +17,22 @@ In any case, polyfill improves cross-browser compatibility
 * `tabs` - to be able to view and manage active tabs
 * `webNavigation` - to be able to intercept navigation to Zendesk links
 * Access and change zendesk.com websites - to be able to open Zendesk's internal tabs
+
+## Building
+
+To build loose files:
+
+```shell
+git clone https://github.com/alpha-tango-kilo/PicoTab
+cd PicoTab
+npm install
+npm run build
+```
+
+These can then be loaded as a loose file extension from `./build`, or if you want it zipped up for distribution/release, additionally run:
+
+```shell
+npm run ship
+```
+
+Which will create `release.zip` in the working directory
