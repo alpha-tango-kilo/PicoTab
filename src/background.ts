@@ -1,55 +1,95 @@
 import { browser } from "webextension-polyfill-ts";
 
-// TODO: account for incompatible subdomains
 const ZENDESK_URLS = ["http://*.zendesk.com/*", "https://*.zendesk.com/*"];
 
-class MasterTab {
-    private id: number | null
+// Maps Zendesk subdomains to the ID of the master tab for that subdomain
+let masters: Map<string, number> = new Map();
 
-    constructor() {
-        this.id = null;
-    }
+browser.tabs.onUpdated.addListener(async (tabID, info) => {
+    // If URL hasn't changed, we don't care
+    if (!info.url) {
+        return;
+    } else if (isZendeskURL(info.url!)) {
+        console.log(`Tab ${tabID} changed to a Zendesk URL`);
+        let subdomain = getSubdomain(info.url!);
+        let master = masters.get(subdomain);
 
-    /**
-     * Get current master tab ID
-     * Checked to make sure it is valid
-     * If the current ID is null or no longer valid, tries to get a new one using findMasterTab()
-     */
-    async getID(): Promise<number> {
-        if (this.id !== null) {
-            this.id = await browser.tabs.get(this.id)
-                .then(tab => tab.id!)
-                .catch(_ => this.findMasterTab());
+        if (master === undefined) {
+            await updateMasters();
         } else {
-            console.log("Searching for Zendesk tab to make master");
-            this.id = await this.findMasterTab();
+            await merge(tabID, master);
         }
-        return this.id;
+    } else {
+        console.log(`Tab ${tabID} changed to a non-Zendesk URL`);
+        // This is going to get called a lot unnecessarily
+        await updateMasters();
+    }
+});
+
+// Update masters if a Zendesk tab is closed
+browser.tabs.onRemoved.addListener(async (tabID, _) => {
+    if (!await isZendeskTab(tabID)) return;
+    console.log(`Zendesk tab with ID ${tabID} closed`);
+    await updateMasters();
+});
+
+/**
+ * Remove any bad entries from masters, and discover any new Zendesk tabs
+ * for subdomains not already covered
+ */
+async function updateMasters() {
+    console.log("Updating masters")
+    // Iterate over all masters and remove any bad entries (closed tabs or no longer on the same subdomain)
+    for (let entry of masters.entries()) {
+        let [subdomain, tabID] = entry;
+        try {
+            let tab = await browser.tabs.get(tabID);
+            // At this point we know a tab still exists with the ID
+            // So long as this if statement isn't true, we want to leave this entry intact
+            if (getSubdomain(tab.url!) !== subdomain) {
+                // We hit this condition in the case that a Zendesk tab changed to a different subdomain
+                masters.delete(subdomain);
+            }
+        } catch (err) {
+            // Failed to access tab, probably closed, remove from masters
+            console.log("Getting tabID failed");
+            console.log(err);
+            masters.delete(subdomain);
+        }
     }
 
-    /**
-     * Get ID of first Zendesk tab if it exists
-     */
-    private async findMasterTab(): Promise<number | null> {
-        let tabs = await browser.tabs.query({ url: ZENDESK_URLS });
-        if (tabs.length == 0) {
-            console.error("No Zendesk tab found to consider master");
-            return null;
-        } else {
-            return tabs[0].id!;
+    // Iterate over all Zendesk tabs and add their ID to masters if the subdomain isn't recognised
+    for (let tab of await browser.tabs.query({ url: ZENDESK_URLS })) {
+        let subdomain = getSubdomain(tab.url!);
+        if (!masters.has(subdomain)) {
+            masters.set(subdomain, tab.id!);
         }
     }
 }
 
-let masterTab = new MasterTab();
+// TODO: take implementation from Zendesk QuickTab
+async function merge(into: number, master: number) {
+    alert(`Pretend I merged tab ${into} into tab ${master}`);
+    await browser.tabs.discard(into);
+}
 
-browser.tabs.onUpdated.addListener(async (id, _) => {
-    let masterID = await masterTab.getID();
-    if (id === masterID) {
-        return;
+function getSubdomain(urlString: string): string {
+    let url = new URL(urlString);
+    let parts = url.hostname.split('.');
+    if (parts.length <= 2) {
+        return "";
+    } else {
+        // Could be more robust
+        return parts[0];
     }
-    
-    // Make ZD master tab active
-    browser.tabs.update(masterID, { active: true, highlighted: true });
-    // TODO: merge
-}, { urls: ZENDESK_URLS });
+}
+
+async function isZendeskTab(tabID: number): Promise<boolean> {
+    let tab = await browser.tabs.get(tabID);
+    return isZendeskURL(tab.url!);
+}
+
+function isZendeskURL(urlString: string): boolean {
+    let url = new URL(urlString);
+    return url.hostname.endsWith("zendesk.com");
+}
